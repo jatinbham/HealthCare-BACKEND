@@ -30,7 +30,6 @@ const groq = new Groq({
 const authMiddleware = (req, res, next) => {
 
     try {
-
         const token = req.headers.authorization?.split(" ")[1]
 
         if (!token) {
@@ -40,17 +39,14 @@ const authMiddleware = (req, res, next) => {
         }
 
         const verified = jwt.verify(token, process.env.JWT_SECRET)
-
         req.user = verified
 
         next()
 
     } catch (error) {
-
         return res.status(401).json({
-            message: "Invalid token"
+            message: "Session expired, please login again"
         })
-
     }
 
 }
@@ -66,6 +62,18 @@ app.post("/signup", async (req, res) => {
     try {
 
         const { name, email, password } = req.body
+
+        if (!name || !email || !password) {
+            return res.status(400).json({
+                message: "All fields are required"
+            })
+        }
+
+        if (password.length < 6) {
+            return res.status(400).json({
+                message: "Password must be at least 6 characters"
+            })
+        }
 
         const existing = await User.findOne({ email })
 
@@ -129,7 +137,11 @@ app.post("/login", async (req, res) => {
         res.json({
             message: "Login success",
             token,
-            user
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email
+            }
         })
 
     } catch (error) {
@@ -152,12 +164,12 @@ app.get("/dashboard", authMiddleware, (req, res) => {
 
 })
 
-// AI HEALTH ROUTE (FINAL WORKING GROQ)
+// ✅ AI HEALTH ROUTE (CHATGPT STYLE)
 app.post("/ai-health", async (req, res) => {
 
     try {
 
-        const { symptoms } = req.body
+        let { symptoms } = req.body
 
         if (!symptoms) {
             return res.status(400).json({
@@ -165,21 +177,30 @@ app.post("/ai-health", async (req, res) => {
             })
         }
 
+        // ✅ sanitize input
+        symptoms = symptoms.trim().slice(0, 300)
+
         const chat = await groq.chat.completions.create({
             model: "llama-3.1-8b-instant",
             messages: [
                 {
-                    role: "user",
+                    role: "system",
                     content: `
-User symptoms: ${symptoms}
+You are a friendly AI doctor.
 
-Give:
-1. Possible health issue
-2. Stress analysis
-3. Health suggestions
-
-Keep response short and simple.
-                    `
+Rules:
+- Talk like a real doctor chatting with a patient
+- Use simple, natural language
+- Keep response between 3-5 sentences
+- Do NOT use labels like "Issue:", "Advice:", etc.
+- Do NOT sound robotic
+- Always end with a gentle precaution
+- Never claim to be a real doctor
+`
+                },
+                {
+                    role: "user",
+                    content: symptoms
                 }
             ]
         })
