@@ -12,13 +12,14 @@ dotenv.config()
 
 const app = express()
 
+// Middleware
 app.use(cors({ origin: "*" }))
 app.use(express.json())
 
-// DB
+// DB CONNECT
 mongoose.connect(process.env.MONGO_URL)
 .then(() => console.log("MongoDB Connected 🚀"))
-.catch(err => console.log(err))
+.catch(err => console.log("DB Error:", err))
 
 // GROQ SETUP
 const groq = new Groq({
@@ -30,7 +31,7 @@ const authMiddleware = (req, res, next) => {
 
     try {
 
-        const token = req.headers.authorization
+        const token = req.headers.authorization?.split(" ")[1]
 
         if (!token) {
             return res.status(401).json({
@@ -46,7 +47,7 @@ const authMiddleware = (req, res, next) => {
 
     } catch (error) {
 
-        res.status(401).json({
+        return res.status(401).json({
             message: "Invalid token"
         })
 
@@ -66,9 +67,9 @@ app.post("/signup", async (req, res) => {
 
         const { name, email, password } = req.body
 
-        const existingUser = await User.findOne({ email })
+        const existing = await User.findOne({ email })
 
-        if (existingUser) {
+        if (existing) {
             return res.status(400).json({
                 message: "User already exists"
             })
@@ -83,11 +84,15 @@ app.post("/signup", async (req, res) => {
         })
 
         res.json({
-            message: "User created"
+            message: "User created successfully"
         })
 
     } catch (error) {
-        res.status(500).json({ error: error.message })
+
+        res.status(500).json({
+            error: error.message
+        })
+
     }
 
 })
@@ -102,13 +107,17 @@ app.post("/login", async (req, res) => {
         const user = await User.findOne({ email })
 
         if (!user) {
-            return res.status(400).json({ message: "User not found" })
+            return res.status(400).json({
+                message: "User not found"
+            })
         }
 
         const match = await bcrypt.compare(password, user.password)
 
         if (!match) {
-            return res.status(400).json({ message: "Invalid password" })
+            return res.status(400).json({
+                message: "Invalid password"
+            })
         }
 
         const token = jwt.sign(
@@ -118,12 +127,17 @@ app.post("/login", async (req, res) => {
         )
 
         res.json({
+            message: "Login success",
             token,
             user
         })
 
     } catch (error) {
-        res.status(500).json({ error: error.message })
+
+        res.status(500).json({
+            error: error.message
+        })
+
     }
 
 })
@@ -138,7 +152,7 @@ app.get("/dashboard", authMiddleware, (req, res) => {
 
 })
 
-// AI HEALTH (GROQ + LLaMA 3)
+// AI HEALTH ROUTE (GROQ LLaMA 3)
 app.post("/ai-health", async (req, res) => {
 
     try {
@@ -176,7 +190,7 @@ Keep response short and simple.
 
     } catch (error) {
 
-        console.log("GROQ ERROR:", error)
+        console.log("AI ERROR:", error)
 
         res.status(500).json({
             error: error.message
@@ -186,7 +200,7 @@ Keep response short and simple.
 
 })
 
-// SERVER
+// SERVER START
 app.listen(5000, () => {
     console.log("Server running on port 5000 🚀")
 })
