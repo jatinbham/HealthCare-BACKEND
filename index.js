@@ -4,35 +4,26 @@ import cors from "cors"
 import dotenv from "dotenv"
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import Groq from "groq-sdk"
 
 import User from "./models/User.js"
 
 dotenv.config()
 
-console.log("Gemini Key:", process.env.GEMINI_API_KEY)
-
-const genAI = new GoogleGenerativeAI(
-    process.env.GEMINI_API_KEY
-)
-
-const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash"
-})
-
 const app = express()
 
-app.use(cors({
-    origin: "*"
-}))
-
+app.use(cors({ origin: "*" }))
 app.use(express.json())
 
+// DB
 mongoose.connect(process.env.MONGO_URL)
 .then(() => console.log("MongoDB Connected 🚀"))
 .catch(err => console.log(err))
 
-
+// GROQ SETUP
+const groq = new Groq({
+    apiKey: process.env.GROQ_API_KEY
+})
 
 // AUTH MIDDLEWARE
 const authMiddleware = (req, res, next) => {
@@ -42,17 +33,12 @@ const authMiddleware = (req, res, next) => {
         const token = req.headers.authorization
 
         if (!token) {
-
             return res.status(401).json({
                 message: "No token provided"
             })
-
         }
 
-        const verified = jwt.verify(
-            token,
-            process.env.JWT_SECRET
-        )
+        const verified = jwt.verify(token, process.env.JWT_SECRET)
 
         req.user = verified
 
@@ -68,16 +54,12 @@ const authMiddleware = (req, res, next) => {
 
 }
 
-
-
-// HOME ROUTE
+// HOME
 app.get("/", (req, res) => {
     res.send("Backend Running 🚀")
 })
 
-
-
-// SIGNUP ROUTE
+// SIGNUP
 app.post("/signup", async (req, res) => {
 
     try {
@@ -87,40 +69,30 @@ app.post("/signup", async (req, res) => {
         const existingUser = await User.findOne({ email })
 
         if (existingUser) {
-
             return res.status(400).json({
                 message: "User already exists"
             })
-
         }
 
         const hashedPassword = await bcrypt.hash(password, 10)
 
-        const user = await User.create({
+        await User.create({
             name,
             email,
             password: hashedPassword
         })
 
-        res.status(201).json({
-            message: "User created successfully"
+        res.json({
+            message: "User created"
         })
 
     } catch (error) {
-
-        console.log(error)
-
-        res.status(500).json({
-            error: error.message
-        })
-
+        res.status(500).json({ error: error.message })
     }
 
 })
 
-
-
-// LOGIN ROUTE
+// LOGIN
 app.post("/login", async (req, res) => {
 
     try {
@@ -130,132 +102,81 @@ app.post("/login", async (req, res) => {
         const user = await User.findOne({ email })
 
         if (!user) {
-
-            return res.status(400).json({
-                message: "User not found"
-            })
-
+            return res.status(400).json({ message: "User not found" })
         }
 
-        const isMatch = await bcrypt.compare(
-            password,
-            user.password
-        )
+        const match = await bcrypt.compare(password, user.password)
 
-        if (!isMatch) {
-
-            return res.status(400).json({
-                message: "Invalid password"
-            })
-
+        if (!match) {
+            return res.status(400).json({ message: "Invalid password" })
         }
 
         const token = jwt.sign(
-
-            {
-                id: user._id
-            },
-
+            { id: user._id },
             process.env.JWT_SECRET,
-
-            {
-                expiresIn: "7d"
-            }
-
+            { expiresIn: "7d" }
         )
 
-        res.status(200).json({
-
-            message: "Login successful",
-
+        res.json({
             token,
-
-            user: {
-                id: user._id,
-                name: user.name,
-                email: user.email
-            }
-
+            user
         })
 
     } catch (error) {
-
-        console.log(error)
-
-        res.status(500).json({
-            error: error.message
-        })
-
+        res.status(500).json({ error: error.message })
     }
 
 })
 
-
-
-// PROTECTED DASHBOARD ROUTE
+// DASHBOARD
 app.get("/dashboard", authMiddleware, (req, res) => {
 
-    res.status(200).json({
-
-        message: "Welcome to dashboard 🚀",
-
+    res.json({
+        message: "Welcome dashboard 🚀",
         user: req.user
-
     })
 
 })
 
-
-
-// AI HEALTH ROUTE
+// AI HEALTH (GROQ + LLaMA 3)
 app.post("/ai-health", async (req, res) => {
 
     try {
 
         const { symptoms } = req.body
 
-        const prompt = `
-        User symptoms: ${symptoms}
-
-        Give:
-        1. Possible health issue
-        2. Stress analysis
-        3. Health suggestions
-        Keep it short.
-        `
-
-        // retry logic
-        let result
-        let attempts = 0
-
-        while (attempts < 3) {
-
-            try {
-                result = await model.generateContent(prompt)
-                break
-            } catch (err) {
-
-                console.log("Retrying AI...", attempts + 1)
-
-                await new Promise(r => setTimeout(r, 7000))
-
-                attempts++
-
-                if (attempts === 3) throw err
-            }
-
+        if (!symptoms) {
+            return res.status(400).json({
+                error: "Symptoms required"
+            })
         }
 
-        const response = await result.response
-        const text = response.text()
+        const chat = await groq.chat.completions.create({
+            model: "llama3-70b-8192",
+            messages: [
+                {
+                    role: "user",
+                    content: `
+User symptoms: ${symptoms}
+
+Give:
+1. Possible health issue
+2. Stress analysis
+3. Health suggestions
+
+Keep response short and simple.
+                    `
+                }
+            ]
+        })
 
         res.json({
-            reply: text
+            reply: chat.choices[0].message.content
         })
 
     } catch (error) {
 
-        console.log("AI FINAL ERROR:", error)
+        console.log("GROQ ERROR:", error)
 
         res.status(500).json({
             error: error.message
@@ -265,8 +186,7 @@ app.post("/ai-health", async (req, res) => {
 
 })
 
-
-
+// SERVER
 app.listen(5000, () => {
     console.log("Server running on port 5000 🚀")
 })
