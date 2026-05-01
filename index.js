@@ -1,39 +1,47 @@
-import express from 'express'
-import cors from 'cors'
-import mongoose from 'mongoose'
-import dotenv from 'dotenv'
-
-import User from './models/User.js'
+import express from "express"
+import mongoose from "mongoose"
+import cors from "cors"
+import dotenv from "dotenv"
+import User from "./models/User.js"
 
 dotenv.config()
 
 const app = express()
 
-app.use(cors())
+// middlewares
+app.use(cors({
+    origin: "*"
+}))
 app.use(express.json())
 
-// Debug (important)
-console.log("Mongo URL:", process.env.MONGO_URL)
-
+// MongoDB connection
 mongoose.connect(process.env.MONGO_URL)
-.then(() => console.log("MongoDB Connected"))
-.catch(err => {
-    console.log("❌ MongoDB Connection Error:")
-    console.log(err)
+.then(() => {
+    console.log("MongoDB Connected 🚀")
+})
+.catch((err) => {
+    console.log("MongoDB Error ❌", err)
 })
 
-app.get('/', (req, res) => {
-    res.send('Backend Running 🚀')
+// test route
+app.get("/", (req, res) => {
+    res.send("Backend Running 🚀")
 })
 
-app.post('/signup', async (req, res) => {
+// SIGNUP ROUTE
+app.post("/signup", async (req, res) => {
 
     try {
+
+        console.log("Request Body:", req.body)
 
         const { name, email, password } = req.body
 
         if (!name || !email || !password) {
-            return res.status(400).json({ error: "All fields required" })
+            return res.status(400).json({
+                success: false,
+                message: "All fields are required"
+            })
         }
 
         const user = await User.create({
@@ -42,14 +50,23 @@ app.post('/signup', async (req, res) => {
             password
         })
 
-        res.json(user)
+        res.status(200).json({
+            success: true,
+            user
+        })
 
     } catch (error) {
-        res.status(500).json({ error: error.message })
-    }
 
+        console.log("Backend Error ❌", error)
+
+        res.status(500).json({
+            success: false,
+            error: error.message
+        })
+    }
 })
 
+// server start
 app.listen(5000, () => {
-    console.log('Server running on port 5000')
+    console.log("Server running on port 5000 🚀")
 })
