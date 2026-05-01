@@ -10,10 +10,14 @@ import User from "./models/User.js"
 
 dotenv.config()
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+console.log("Gemini Key:", process.env.GEMINI_API_KEY)
+
+const genAI = new GoogleGenerativeAI(
+    process.env.GEMINI_API_KEY
+)
 
 const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash"
+    model: "gemini-2.0-flash"
 })
 
 const app = express()
@@ -201,11 +205,24 @@ app.get("/dashboard", authMiddleware, (req, res) => {
 
 })
 
+
+
+// AI HEALTH ROUTE
 app.post("/ai-health", async (req, res) => {
 
     try {
 
+        console.log("AI Route Hit 🚀")
+
         const { symptoms } = req.body
+
+        if (!symptoms) {
+
+            return res.status(400).json({
+                error: "Symptoms are required"
+            })
+
+        }
 
         const prompt = `
         User symptoms: ${symptoms}
@@ -214,19 +231,23 @@ app.post("/ai-health", async (req, res) => {
         1. Possible health issue
         2. Stress analysis
         3. Health suggestions
+
+        Keep response short and simple.
         `
 
         const result = await model.generateContent(prompt)
 
-        const response = result.response.text()
+        const response = await result.response
+
+        const text = response.text()
 
         res.json({
-            reply: response
+            reply: text
         })
 
     } catch (error) {
 
-        console.log(error)
+        console.log("AI ERROR:", error)
 
         res.status(500).json({
             error: error.message
@@ -235,6 +256,8 @@ app.post("/ai-health", async (req, res) => {
     }
 
 })
+
+
 
 app.listen(5000, () => {
     console.log("Server running on port 5000 🚀")
