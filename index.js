@@ -4,10 +4,17 @@ import cors from "cors"
 import dotenv from "dotenv"
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
+import { GoogleGenerativeAI } from "@google/generative-ai"
 
 import User from "./models/User.js"
 
 dotenv.config()
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+
+const model = genAI.getGenerativeModel({
+    model: "gemini-1.5-flash"
+})
 
 const app = express()
 
@@ -194,7 +201,40 @@ app.get("/dashboard", authMiddleware, (req, res) => {
 
 })
 
+app.post("/ai-health", async (req, res) => {
 
+    try {
+
+        const { symptoms } = req.body
+
+        const prompt = `
+        User symptoms: ${symptoms}
+
+        Give:
+        1. Possible health issue
+        2. Stress analysis
+        3. Health suggestions
+        `
+
+        const result = await model.generateContent(prompt)
+
+        const response = result.response.text()
+
+        res.json({
+            reply: response
+        })
+
+    } catch (error) {
+
+        console.log(error)
+
+        res.status(500).json({
+            error: error.message
+        })
+
+    }
+
+})
 
 app.listen(5000, () => {
     console.log("Server running on port 5000 🚀")
