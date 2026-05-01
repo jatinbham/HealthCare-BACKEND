@@ -1,41 +1,86 @@
-import express from 'express'
-import cors from 'cors'
-import mongoose from 'mongoose'
-import dotenv from 'dotenv'
+import express from "express"
+import mongoose from "mongoose"
+import cors from "cors"
+import dotenv from "dotenv"
+import bcrypt from "bcryptjs"
+import jwt from "jsonwebtoken"
 
-import User from './models/User.js'
+import User from "./models/User.js"
 
 dotenv.config()
 
 const app = express()
 
-app.use(cors())
+app.use(cors({
+    origin: "*"
+}))
+
 app.use(express.json())
 
-// Debug (important)
-console.log("Mongo URL:", process.env.MONGO_URL)
-
 mongoose.connect(process.env.MONGO_URL)
-.then(() => console.log("MongoDB Connected"))
-.catch(err => {
-    console.log("❌ MongoDB Connection Error:")
-    console.log(err)
-})
+.then(() => console.log("MongoDB Connected 🚀"))
+.catch(err => console.log(err))
 
-app.get('/', (req, res) => {
-    res.send('Backend Running 🚀')
-})
 
-app.post('/signup', async (req, res) => {
+
+// AUTH MIDDLEWARE
+const authMiddleware = (req, res, next) => {
 
     try {
 
-        console.log("Request Body:", req.body)
+        const token = req.headers.authorization
+
+        if (!token) {
+
+            return res.status(401).json({
+                message: "No token provided"
+            })
+
+        }
+
+        const verified = jwt.verify(
+            token,
+            process.env.JWT_SECRET
+        )
+
+        req.user = verified
+
+        next()
+
+    } catch (error) {
+
+        res.status(401).json({
+            message: "Invalid token"
+        })
+
+    }
+
+}
+
+
+
+// HOME ROUTE
+app.get("/", (req, res) => {
+    res.send("Backend Running 🚀")
+})
+
+
+
+// SIGNUP ROUTE
+app.post("/signup", async (req, res) => {
+
+    try {
 
         const { name, email, password } = req.body
 
-        if (!name || !email || !password) {
-            return res.status(400).json({ error: "All fields required" })
+        const existingUser = await User.findOne({ email })
+
+        if (existingUser) {
+
+            return res.status(400).json({
+                message: "User already exists"
+            })
+
         }
 
         const hashedPassword = await bcrypt.hash(password, 10)
@@ -46,16 +91,111 @@ app.post('/signup', async (req, res) => {
             password: hashedPassword
         })
 
-        res.json(user)
+        res.status(201).json({
+            message: "User created successfully"
+        })
 
     } catch (error) {
-        res.status(500).json({ error: error.message })
+
+        console.log(error)
+
+        res.status(500).json({
+            error: error.message
+        })
+
     }
+
 })
 
 
 
-// server start
+// LOGIN ROUTE
+app.post("/login", async (req, res) => {
+
+    try {
+
+        const { email, password } = req.body
+
+        const user = await User.findOne({ email })
+
+        if (!user) {
+
+            return res.status(400).json({
+                message: "User not found"
+            })
+
+        }
+
+        const isMatch = await bcrypt.compare(
+            password,
+            user.password
+        )
+
+        if (!isMatch) {
+
+            return res.status(400).json({
+                message: "Invalid password"
+            })
+
+        }
+
+        const token = jwt.sign(
+
+            {
+                id: user._id
+            },
+
+            process.env.JWT_SECRET,
+
+            {
+                expiresIn: "7d"
+            }
+
+        )
+
+        res.status(200).json({
+
+            message: "Login successful",
+
+            token,
+
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email
+            }
+
+        })
+
+    } catch (error) {
+
+        console.log(error)
+
+        res.status(500).json({
+            error: error.message
+        })
+
+    }
+
+})
+
+
+
+// PROTECTED DASHBOARD ROUTE
+app.get("/dashboard", authMiddleware, (req, res) => {
+
+    res.status(200).json({
+
+        message: "Welcome to dashboard 🚀",
+
+        user: req.user
+
+    })
+
+})
+
+
+
 app.listen(5000, () => {
     console.log("Server running on port 5000 🚀")
 })
