@@ -165,12 +165,12 @@ app.post("/ai-health", async (req, res) => {
             })
         }
 
-        const chat = await groq.chat.completions.create({
-            model: "llama3-70b-8192",
-            messages: [
-                {
-                    role: "user",
-                    content: `
+       const chat = await groq.chat.completions.create({
+    model: "llama-3.1-70b-versatile",
+    messages: [
+        {
+            role: "user",
+            content: `
 User symptoms: ${symptoms}
 
 Give:
@@ -179,10 +179,10 @@ Give:
 3. Health suggestions
 
 Keep response short and simple.
-                    `
-                }
-            ]
-        })
+            `
+        }
+    ]
+})
 
         res.json({
             reply: chat.choices[0].message.content
