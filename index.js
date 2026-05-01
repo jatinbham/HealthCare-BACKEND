@@ -1,35 +1,32 @@
-import express from "express"
-import mongoose from "mongoose"
-import cors from "cors"
-import dotenv from "dotenv"
-import User from "./models/User.js"
+import express from 'express'
+import cors from 'cors'
+import mongoose from 'mongoose'
+import dotenv from 'dotenv'
+
+import User from './models/User.js'
 
 dotenv.config()
 
 const app = express()
 
-// middlewares
-app.use(cors({
-    origin: "*"
-}))
+app.use(cors())
 app.use(express.json())
 
-// MongoDB connection
+// Debug (important)
+console.log("Mongo URL:", process.env.MONGO_URL)
+
 mongoose.connect(process.env.MONGO_URL)
-.then(() => {
-    console.log("MongoDB Connected 🚀")
-})
-.catch((err) => {
-    console.log("MongoDB Error ❌", err)
-})
-
-// test route
-app.get("/", (req, res) => {
-    res.send("Backend Running 🚀")
+.then(() => console.log("MongoDB Connected"))
+.catch(err => {
+    console.log("❌ MongoDB Connection Error:")
+    console.log(err)
 })
 
-// SIGNUP ROUTE
-app.post("/signup", async (req, res) => {
+app.get('/', (req, res) => {
+    res.send('Backend Running 🚀')
+})
+
+app.post('/signup', async (req, res) => {
 
     try {
 
@@ -38,33 +35,25 @@ app.post("/signup", async (req, res) => {
         const { name, email, password } = req.body
 
         if (!name || !email || !password) {
-            return res.status(400).json({
-                success: false,
-                message: "All fields are required"
-            })
+            return res.status(400).json({ error: "All fields required" })
         }
+
+        const hashedPassword = await bcrypt.hash(password, 10)
 
         const user = await User.create({
             name,
             email,
-            password
+            password: hashedPassword
         })
 
-        res.status(200).json({
-            success: true,
-            user
-        })
+        res.json(user)
 
     } catch (error) {
-
-        console.log("Backend Error ❌", error)
-
-        res.status(500).json({
-            success: false,
-            error: error.message
-        })
+        res.status(500).json({ error: error.message })
     }
 })
+
+
 
 // server start
 app.listen(5000, () => {
