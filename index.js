@@ -12,7 +12,7 @@ dotenv.config()
 
 const app = express()
 
-// Middleware
+// MIDDLEWARE
 app.use(cors({ origin: "*" }))
 app.use(express.json())
 
@@ -152,7 +152,7 @@ app.get("/dashboard", authMiddleware, (req, res) => {
 
 })
 
-// AI HEALTH ROUTE (GROQ LLaMA 3)
+// AI HEALTH ROUTE (FINAL WORKING GROQ)
 app.post("/ai-health", async (req, res) => {
 
     try {
@@ -165,12 +165,12 @@ app.post("/ai-health", async (req, res) => {
             })
         }
 
-       const chat = await groq.chat.completions.create({
-    model: "llama-3.1-70b-versatile",
-    messages: [
-        {
-            role: "user",
-            content: `
+        const chat = await groq.chat.completions.create({
+            model: "llama-3.1-8b-instant",
+            messages: [
+                {
+                    role: "user",
+                    content: `
 User symptoms: ${symptoms}
 
 Give:
@@ -179,10 +179,10 @@ Give:
 3. Health suggestions
 
 Keep response short and simple.
-            `
-        }
-    ]
-})
+                    `
+                }
+            ]
+        })
 
         res.json({
             reply: chat.choices[0].message.content
