@@ -212,17 +212,7 @@ app.post("/ai-health", async (req, res) => {
 
     try {
 
-        console.log("AI Route Hit 🚀")
-
         const { symptoms } = req.body
-
-        if (!symptoms) {
-
-            return res.status(400).json({
-                error: "Symptoms are required"
-            })
-
-        }
 
         const prompt = `
         User symptoms: ${symptoms}
@@ -231,14 +221,32 @@ app.post("/ai-health", async (req, res) => {
         1. Possible health issue
         2. Stress analysis
         3. Health suggestions
-
-        Keep response short and simple.
+        Keep it short.
         `
 
-        const result = await model.generateContent(prompt)
+        // retry logic
+        let result
+        let attempts = 0
+
+        while (attempts < 3) {
+
+            try {
+                result = await model.generateContent(prompt)
+                break
+            } catch (err) {
+
+                console.log("Retrying AI...", attempts + 1)
+
+                await new Promise(r => setTimeout(r, 7000))
+
+                attempts++
+
+                if (attempts === 3) throw err
+            }
+
+        }
 
         const response = await result.response
-
         const text = response.text()
 
         res.json({
@@ -247,7 +255,7 @@ app.post("/ai-health", async (req, res) => {
 
     } catch (error) {
 
-        console.log("AI ERROR:", error)
+        console.log("AI FINAL ERROR:", error)
 
         res.status(500).json({
             error: error.message
